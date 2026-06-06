@@ -150,3 +150,90 @@ def test_verify_challenge_missing_challenge() -> None:
     params = {"hub.mode": "subscribe", "hub.verify_token": "s3cret"}
     with pytest.raises(WebhookParseError):
         verify_challenge(params, expected_token="s3cret")
+
+
+def test_parse_interactive_button_reply() -> None:
+    payload = _payload(
+        messages=[
+            {
+                "from": "15551230003",
+                "id": "wamid.BTN",
+                "type": "interactive",
+                "interactive": {
+                    "type": "button_reply",
+                    "button_reply": {"id": "/menu", "title": "Main menu"},
+                },
+            }
+        ],
+        contacts=[],
+    )
+    message = parse_message(payload)
+    assert message.type == "interactive"
+    assert message.interactive_reply_id == "/menu"
+    assert message.interactive_reply_title == "Main menu"
+    assert message.command_text == "/menu"
+
+
+def test_parse_interactive_list_reply() -> None:
+    payload = _payload(
+        messages=[
+            {
+                "from": "15551230004",
+                "type": "interactive",
+                "interactive": {
+                    "type": "list_reply",
+                    "list_reply": {"id": "billing", "title": "Billing"},
+                },
+            }
+        ],
+        contacts=[],
+    )
+    message = parse_message(payload)
+    assert message.interactive_reply_id == "billing"
+    assert message.command_text == "billing"
+
+
+def test_parse_image_message_media_fields() -> None:
+    payload = _payload(
+        messages=[
+            {
+                "from": "15551230005",
+                "type": "image",
+                "image": {
+                    "id": "MID-99",
+                    "mime_type": "image/png",
+                    "caption": "look",
+                },
+            }
+        ],
+        contacts=[],
+    )
+    message = parse_message(payload)
+    assert message.type == "image"
+    assert message.media_id == "MID-99"
+    assert message.media_mime_type == "image/png"
+    assert message.caption == "look"
+
+
+def test_parse_document_message_filename() -> None:
+    payload = _payload(
+        messages=[
+            {
+                "from": "15551230006",
+                "type": "document",
+                "document": {"id": "DOC-1", "filename": "report.pdf"},
+            }
+        ],
+        contacts=[],
+    )
+    message = parse_message(payload)
+    assert message.filename == "report.pdf"
+    assert message.media_id == "DOC-1"
+
+
+def test_command_text_for_plain_text_is_text() -> None:
+    payload = _payload(
+        messages=[{"from": "1", "type": "text", "text": {"body": "hi"}}],
+        contacts=[],
+    )
+    assert parse_message(payload).command_text == "hi"

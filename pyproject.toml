@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "whatsapp-bot"
-version = "0.1.0"
+version = "0.2.0"
 description = "WhatsApp bot template — webhook parsing, command routing, and a fake sender (offline) — by Viprasol Tech."
 readme = "README.md"
 requires-python = ">=3.11"

@@ -36,6 +36,18 @@ def _default_echo(message: IncomingMessage) -> str:
     return f"You said: {message.text.strip()}"
 
 
+def _routing_key(message: IncomingMessage) -> str:
+    """Compute the lookup key for ``message``.
+
+    Interactive button/list replies route on their reply id (which may itself be a
+    command such as ``/menu``); plain text routes on its leading slash command.
+    """
+    if message.type == "interactive" and message.interactive_reply_id:
+        token = message.interactive_reply_id.strip().lower()
+        return token if token.startswith("/") else f"/{token}"
+    return _normalize_command(message.text)
+
+
 class Router:
     """Registry of command handlers with a default fallback.
 
@@ -97,9 +109,13 @@ class Router:
         Returns:
             The reply text produced by the chosen handler.
         """
-        command = _normalize_command(message.text)
-        handler = self._handlers.get(command, self._default)
+        handler = self._handlers.get(_routing_key(message), self._default)
         return handler(message)
+
+    def has_command(self, name: str) -> bool:
+        """Return ``True`` if a handler is registered for command ``name``."""
+        key = name if name.startswith("/") else f"/{name}"
+        return key.lower() in self._handlers
 
 
 def default_router() -> Router:
@@ -116,11 +132,27 @@ def default_router() -> Router:
             "Available commands:\n"
             "/help - show this message\n"
             "/menu - show the main menu\n"
+            "/start - greet and get started\n"
+            "/ping - health check\n"
+            "/about - about this bot\n"
             "Anything else is echoed back to you."
         )
 
     @router.command("/menu")
     def _menu(_: IncomingMessage) -> str:
         return "Main menu:\n1. Talk to support\n2. Check status\n3. Pricing"
+
+    @router.command("/start")
+    def _start(message: IncomingMessage) -> str:
+        who = message.contact_name or "there"
+        return f"Hi {who}! Send /help to see what I can do."
+
+    @router.command("/ping")
+    def _ping(_: IncomingMessage) -> str:
+        return "pong"
+
+    @router.command("/about")
+    def _about(_: IncomingMessage) -> str:
+        return "WhatsApp Bot by Viprasol Tech — https://viprasol.com"
 
     return router

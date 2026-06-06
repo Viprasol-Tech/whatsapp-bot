@@ -5,8 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 from whatsapp_bot.bot import Bot
+from whatsapp_bot.middleware import MiddlewareChain, Next, rate_limit_middleware
 from whatsapp_bot.router import default_router
 from whatsapp_bot.sender import FakeSender, Sender, build_text_message
+from whatsapp_bot.webhook import IncomingMessage
 
 
 def _payload(sender: str, text: str) -> dict[str, Any]:
@@ -81,6 +83,70 @@ def test_bot_echo_default() -> None:
 def test_try_process_webhook_swallows_malformed() -> None:
     bot = Bot(default_router(), FakeSender())
     assert bot.try_process_webhook({"bad": "payload"}) == []
+
+
+def test_bot_runs_middleware_before_router() -> None:
+    seen: list[str] = []
+
+    def tap(message: IncomingMessage, next_: Next) -> str:
+        seen.append(message.text)
+        return next_(message)
+
+    chain = MiddlewareChain().use(tap)
+    bot = Bot(default_router(), FakeSender(), middleware=chain)
+    bot.process_webhook(_payload("1", "/ping"))
+    assert seen == ["/ping"]
+
+
+def test_bot_middleware_short_circuits_router() -> None:
+    class FakeClock:
+        def __init__(self) -> None:
+            self.now = 0.0
+
+        def __call__(self) -> float:
+            return self.now
+
+    chain = MiddlewareChain().use(rate_limit_middleware(1, 60.0, clock=FakeClock()))
+    sender = FakeSender()
+    bot = Bot(default_router(), sender, middleware=chain)
+    bot.process_webhook(_payload("1", "/ping"))
+    replies = bot.process_webhook(_payload("1", "/ping"))
+    assert "too fast" in replies[0].text
+    # both attempts still produced one outgoing message each
+    assert len(sender.sent) == 2
+
+
+def test_bot_handles_interactive_reply_end_to_end() -> None:
+    sender = FakeSender()
+    bot = Bot(default_router(), sender)
+    payload = {
+        "object": "whatsapp_business_account",
+        "entry": [
+            {
+                "id": "0",
+                "changes": [
+                    {
+                        "field": "messages",
+                        "value": {
+                            "messaging_product": "whatsapp",
+                            "messages": [
+                                {
+                                    "from": "1",
+                                    "type": "interactive",
+                                    "interactive": {
+                                        "type": "button_reply",
+                                        "button_reply": {"id": "/menu", "title": "Menu"},
+                                    },
+                                }
+                            ],
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+    replies = bot.process_webhook(payload)
+    assert "Main menu" in replies[0].text
 
 
 def test_status_only_payload_sends_nothing() -> None:

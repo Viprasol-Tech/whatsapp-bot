@@ -14,6 +14,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from whatsapp_bot.middleware import MiddlewareChain
 from whatsapp_bot.router import Router
 from whatsapp_bot.sender import Sender, build_text_message
 from whatsapp_bot.webhook import IncomingMessage, WebhookParseError, parse_messages
@@ -39,14 +40,26 @@ class Bot:
     Args:
         router: Routes inbound messages to reply text.
         sender: Transport used to deliver the replies.
+        middleware: Optional chain wrapping routing (logging, rate limiting, ...).
     """
 
-    def __init__(self, router: Router, sender: Sender) -> None:
+    def __init__(
+        self,
+        router: Router,
+        sender: Sender,
+        *,
+        middleware: MiddlewareChain | None = None,
+    ) -> None:
         self.router = router
         self.sender = sender
+        self.middleware = middleware or MiddlewareChain()
 
     def handle_message(self, message: IncomingMessage) -> Reply:
-        """Route a single inbound message and send its reply.
+        """Route a single inbound message (through middleware) and send its reply.
+
+        The message passes through the configured :class:`MiddlewareChain`; the
+        terminal handler is the router. Middleware may short-circuit with its own
+        reply (e.g. a rate-limit notice) without ever reaching the router.
 
         Args:
             message: The inbound message to handle.
@@ -54,7 +67,7 @@ class Bot:
         Returns:
             The :class:`Reply` that was dispatched.
         """
-        text = self.router.route(message)
+        text = self.middleware.run(message, self.router.route)
         payload = build_text_message(message.sender, text)
         message_id = self.sender.send(payload)
         return Reply(to=message.sender, text=text, message_id=message_id)

@@ -60,3 +60,52 @@ def test_set_default_replaces_handler() -> None:
     router = Router()
     router.set_default(lambda m: "new-default")
     assert router.route(_msg("whatever")) == "new-default"
+
+
+def test_default_router_extra_commands() -> None:
+    router = default_router()
+    assert router.route(_msg("/ping")) == "pong"
+    assert "Viprasol" in router.route(_msg("/about"))
+    assert "Send /help" in router.route(_msg("/start"))
+
+
+def test_start_uses_contact_name() -> None:
+    router = default_router()
+    msg = IncomingMessage(sender="1", text="/start", contact_name="Grace")
+    assert "Hi Grace" in router.route(msg)
+
+
+def test_has_command() -> None:
+    router = default_router()
+    assert router.has_command("/help")
+    assert router.has_command("ping")  # normalizes leading slash
+    assert not router.has_command("/nope")
+
+
+def test_interactive_reply_routes_like_command() -> None:
+    router = default_router()
+    msg = IncomingMessage(
+        sender="1",
+        type="interactive",
+        interactive_reply_id="/menu",
+        interactive_reply_title="Main menu",
+    )
+    assert "Main menu" in router.route(msg)
+
+
+def test_interactive_reply_without_slash_is_normalized() -> None:
+    router = Router(default=lambda m: "fallback")
+
+    @router.command("/topic")
+    def _topic(m: IncomingMessage) -> str:
+        return "topic-handler"
+
+    msg = IncomingMessage(sender="1", type="interactive", interactive_reply_id="topic")
+    assert router.route(msg) == "topic-handler"
+
+
+def test_help_lists_new_commands() -> None:
+    router = default_router()
+    reply = router.route(_msg("/help"))
+    assert "/ping" in reply
+    assert "/about" in reply
