@@ -68,10 +68,22 @@ from whatsapp_bot import Bot, FakeSender, default_router
 bot = Bot(default_router(), FakeSender())
 payload = {
     "object": "whatsapp_business_account",
-    "entry": [{"id": "0", "changes": [{"field": "messages", "value": {
-        "messaging_product": "whatsapp",
-        "messages": [{"from": "15551230001", "type": "text", "text": {"body": "/menu"}}],
-    }}]}],
+    "entry": [
+        {
+            "id": "0",
+            "changes": [
+                {
+                    "field": "messages",
+                    "value": {
+                        "messaging_product": "whatsapp",
+                        "messages": [
+                            {"from": "15551230001", "type": "text", "text": {"body": "/menu"}}
+                        ],
+                    },
+                }
+            ],
+        }
+    ],
 }
 replies = bot.process_webhook(payload)
 print(replies[0].text)  # -> "Main menu:\n1. Talk to support\n..."
@@ -101,12 +113,14 @@ from whatsapp_bot.webhook import IncomingMessage
 store = SessionStore()
 signup = Flow("signup", store)
 
+
 @signup.step("ask_name", start=True)
 def ask_name(message, session):
     if not message.text.strip():
         return StepResult("What's your name?")
     session.set("name", message.text.strip())
     return StepResult("And your email?", next_step="ask_email")
+
 
 @signup.step("ask_email")
 def ask_email(message, session):
@@ -115,8 +129,9 @@ def ask_email(message, session):
     session.set("email", message.text.strip())
     return StepResult(f"Thanks {session.get('name')}!", done=True)
 
-signup.handle(IncomingMessage(sender="1", text="Ada"))         # -> "And your email?"
-signup.handle(IncomingMessage(sender="1", text="ada@x.com"))   # -> "Thanks Ada!"
+
+signup.handle(IncomingMessage(sender="1", text="Ada"))  # -> "And your email?"
+signup.handle(IncomingMessage(sender="1", text="ada@x.com"))  # -> "Thanks Ada!"
 ```
 
 Wrap handling with middleware:
